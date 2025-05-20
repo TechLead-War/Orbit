@@ -1,0 +1,133 @@
+{
+	"info": {
+		"_postman_id": "b5e7b5e7-b5e7-b5e7-b5e7-b5e7b5e7b5e7",
+		"name": "ORBIT - LeetCode Rating Review",
+		"description": "API collection for the ORBIT LeetCode Rating Review System",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Students",
+			"item": [
+				{
+					"name": "Create Student",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Ayush Kapri\",\n    \"email\": \"ayush.kapri@example.com\",\n    \"leetcode_id\": \"ayushkapri\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/students",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students"]
+						},
+						"description": "Register a new student in the system"
+					}
+				},
+				{
+					"name": "List Students",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/students?page=1&page_size=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								},
+								{
+									"key": "page_size",
+									"value": "10",
+									"description": "Number of items per page"
+								}
+							]
+						},
+						"description": "Get a paginated list of students"
+					}
+				},
+				{
+					"name": "Get Student",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", "1"]
+						},
+						"description": "Get details of a specific student"
+					}
+				},
+				{
+					"name": "Update Student Rating",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rating\": 1500,\n    \"problems_count\": 100,\n    \"easy_count\": 40,\n    \"medium_count\": 40,\n    \"hard_count\": 20,\n    \"contest_rating\": 1600,\n    \"global_rank\": 10000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/1/rating",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", "1", "rating"]
+						},
+						"description": "Update a student's LeetCode rating and statistics"
+					}
+				},
+				{
+					"name": "Get Student Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/1/stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", "1", "stats"]
+						},
+						"description": "Get aggregated statistics for a student"
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [""]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [""]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+} 

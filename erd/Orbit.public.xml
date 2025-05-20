@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<database name="Orbit" schema="public" type="PostgreSQL - 14.17 (Homebrew)">
+   <sequences>
+      <sequence increment="1" name="contest_participation_id_seq" startValue="1"/>
+      <sequence increment="1" name="students_id_seq" startValue="1"/>
+      <sequence increment="1" name="weekly_progress_id_seq" startValue="1"/>
+   </sequences>
+   <tables>
+      <table name="contest_participation" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('contest_participation_id_seq'::regclass)" digits="0" id="0" name="id" nullable="false" remarks="" size="10" type="serial" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="student_id" nullable="false" remarks="" size="10" type="int4" typeCode="4">
+            <parent column="id" foreignKey="contest_participation_student_id_fkey" implied="false" onDeleteCascade="true" schema="public" table="students"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="contest_name" nullable="true" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="contest_date" nullable="false" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="rating_before" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="5" name="rating_after" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="6" name="rating_change" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <primaryKey column="id" sequenceNumberInPK="1"/>
+         <index name="contest_participation_pkey" unique="true">
+            <column ascending="true" name="id"/>
+         </index>
+      </table>
+      <table name="students" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('students_id_seq'::regclass)" digits="0" id="0" name="id" nullable="false" remarks="" size="10" type="serial" typeCode="4">
+            <child column="student_id" foreignKey="contest_participation_student_id_fkey" implied="false" onDeleteCascade="true" schema="public" table="contest_participation"/>
+            <child column="student_id" foreignKey="weekly_progress_student_id_fkey" implied="false" onDeleteCascade="true" schema="public" table="weekly_progress"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="name" nullable="false" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="email" nullable="false" remarks="" size="100" type="varchar" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="3" name="profile_link" nullable="true" remarks="" size="2147483647" type="text" typeCode="12"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="4" name="current_rating" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="now()" digits="6" id="5" name="created_at" nullable="true" remarks="" size="35" type="timestamptz" typeCode="93"/>
+         <primaryKey column="id" sequenceNumberInPK="1"/>
+         <index name="students_pkey" unique="true">
+            <column ascending="true" name="id"/>
+         </index>
+         <index name="students_email_key" unique="true">
+            <column ascending="true" name="email"/>
+         </index>
+      </table>
+      <table name="weekly_progress" remarks="" schema="public" type="TABLE">
+         <column autoUpdated="true" defaultValue="nextval('weekly_progress_id_seq'::regclass)" digits="0" id="0" name="id" nullable="false" remarks="" size="10" type="serial" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="1" name="student_id" nullable="false" remarks="" size="10" type="int4" typeCode="4">
+            <parent column="id" foreignKey="weekly_progress_student_id_fkey" implied="false" onDeleteCascade="true" schema="public" table="students"/>
+         </column>
+         <column autoUpdated="false" defaultValue="null" digits="0" id="2" name="week_start" nullable="false" remarks="" size="13" type="date" typeCode="91"/>
+         <column autoUpdated="false" defaultValue="0" digits="0" id="3" name="questions_solved" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="0" digits="0" id="4" name="submissions_count" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="0" digits="0" id="5" name="rating_delta" nullable="true" remarks="" size="10" type="int4" typeCode="4"/>
+         <column autoUpdated="false" defaultValue="false" digits="0" id="6" name="suspected_cheat" nullable="true" remarks="" size="1" type="bool" typeCode="-7"/>
+         <primaryKey column="id" sequenceNumberInPK="1"/>
+         <index name="weekly_progress_pkey" unique="true">
+            <column ascending="true" name="id"/>
+         </index>
+         <index name="weekly_progress_student_id_week_start_key" unique="true">
+            <column ascending="true" name="student_id"/>
+            <column ascending="true" name="week_start"/>
+         </index>
+      </table>
+   </tables>
+</database>

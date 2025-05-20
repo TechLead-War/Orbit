@@ -1,0 +1,3 @@
+students
+contest_participation
+weekly_progress
