@@ -89,9 +89,9 @@ make migrate-down
 // Create Student
 POST /api/v1/students
 {
-    "name": "John Doe",
-    "email": "john@example.com",
-    "leetcode_id": "johndoe123"
+    "name": "Ayush Kap",
+    "email": "ayush@test.com",
+    "leetcode_id": "ayush123"
 }
 
 // Update Rating

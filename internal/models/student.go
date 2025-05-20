@@ -15,20 +15,6 @@ type Student struct {
 	Ratings    []Rating  `json:"ratings,omitempty" gorm:"foreignKey:StudentID"`
 }
 
-// Rating represents a student's LeetCode rating at a point in time
-type Rating struct {
-	ID            uint      `json:"id" gorm:"primaryKey"`
-	StudentID     uint      `json:"student_id"`
-	Rating        int       `json:"rating"`
-	ProblemsCount int       `json:"problems_count"`
-	EasyCount     int       `json:"easy_count"`
-	MediumCount   int       `json:"medium_count"`
-	HardCount     int       `json:"hard_count"`
-	ContestRating int       `json:"contest_rating"`
-	GlobalRank    int       `json:"global_rank"`
-	RecordedAt    time.Time `json:"recorded_at"`
-}
-
 // StudentStats represents aggregated statistics for a student
 type StudentStats struct {
 	StudentID          uint    `json:"student_id"`

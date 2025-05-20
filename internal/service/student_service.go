@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ayush/ORBIT/internal/models"
@@ -10,101 +11,144 @@ import (
 	"go.uber.org/zap"
 )
 
-// StudentService handles business logic for students
 type StudentService struct {
-	repo   *repository.StudentRepository
-	logger *zap.Logger
+	repo            *repository.StudentRepository
+	logger          *zap.Logger
+	leetcodeService *LeetCodeService
 }
 
-// NewStudentService creates a new student service
 func NewStudentService(repo *repository.StudentRepository, logger *zap.Logger) *StudentService {
 	return &StudentService{
-		repo:   repo,
-		logger: logger,
+		repo:            repo,
+		logger:          logger,
+		leetcodeService: NewLeetCodeService(),
 	}
 }
 
-// RegisterStudent registers a new student
 func (s *StudentService) RegisterStudent(ctx context.Context, student *models.Student) error {
-	// Validate student data
-	if err := s.validateStudent(student); err != nil {
-		s.logger.Error("Invalid student data", zap.Error(err))
-		return err
+	// Get problem stats
+	stats, err := s.leetcodeService.GetUserStats(student.LeetcodeID)
+	if err != nil {
+		s.logger.Error("failed to fetch leetcode stats", zap.Error(err))
+		return fmt.Errorf("failed to fetch leetcode stats: %w", err)
 	}
 
-	// Set creation time
+	// Get contest stats
+	contestStats, err := s.leetcodeService.GetContestRanking(student.LeetcodeID)
+	if err != nil {
+		s.logger.Error("failed to fetch contest stats", zap.Error(err))
+		return fmt.Errorf("failed to fetch contest stats: %w", err)
+	}
+
 	now := time.Now()
-	student.CreatedAt = now
-	student.UpdatedAt = now
 
-	// Create student
-	if err := s.repo.Create(ctx, student); err != nil {
-		s.logger.Error("Failed to create student", zap.Error(err))
-		return err
+	rating := models.Rating{
+		Rating:        0,
+		ProblemsCount: stats["All"],
+		EasyCount:     stats["Easy"],
+		MediumCount:   stats["Medium"],
+		HardCount:     stats["Hard"],
+		GlobalRank:    stats["ranking"],
+		ContestRating: contestStats.Data.UserContestRanking.Rating,
+		ContestCount:  contestStats.Data.UserContestRanking.AttendedContestsCount,
+		TopPercentage: contestStats.Data.UserContestRanking.TopPercentage,
+		RecordedAt:    now,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
-	s.logger.Info("Student registered successfully", zap.String("leetcode_id", student.LeetcodeID))
-	return nil
+	// Calculate overall rating (problems + contest performance)
+	problemRating := (rating.EasyCount * 1) + (rating.MediumCount * 3) + (rating.HardCount * 5)
+	contestBonus := int(rating.ContestRating * 0.2) // Contest rating contributes 20% to overall rating
+	rating.Rating = problemRating + contestBonus
+
+	student.Ratings = []models.Rating{rating}
+	return s.repo.Create(ctx, student)
 }
 
-// UpdateStudentRating updates a student's LeetCode rating
 func (s *StudentService) UpdateStudentRating(ctx context.Context, studentID uint, rating *models.Rating) error {
-	// Validate rating data
-	if rating.Rating < 0 {
-		return errors.New("rating cannot be negative")
-	}
-
-	// Set recording time
-	rating.RecordedAt = time.Now()
-	rating.StudentID = studentID
-
-	// Add rating
-	if err := s.repo.AddRating(ctx, rating); err != nil {
-		s.logger.Error("Failed to update student rating",
-			zap.Uint("student_id", studentID),
-			zap.Error(err))
+	student, err := s.repo.GetByID(ctx, studentID)
+	if err != nil {
 		return err
 	}
 
-	s.logger.Info("Student rating updated",
-		zap.Uint("student_id", studentID),
-		zap.Int("rating", rating.Rating))
+	// Get problem stats
+	stats, err := s.leetcodeService.GetUserStats(student.LeetcodeID)
+	if err != nil {
+		s.logger.Error("failed to fetch leetcode stats", zap.Error(err))
+		return fmt.Errorf("failed to fetch leetcode stats: %w", err)
+	}
+
+	// Get contest stats
+	contestStats, err := s.leetcodeService.GetContestRanking(student.LeetcodeID)
+	if err != nil {
+		s.logger.Error("failed to fetch contest stats", zap.Error(err))
+		return fmt.Errorf("failed to fetch contest stats: %w", err)
+	}
+
+	now := time.Now()
+
+	// Update rating with both problem and contest data
+	rating.ProblemsCount = stats["All"]
+	rating.EasyCount = stats["Easy"]
+	rating.MediumCount = stats["Medium"]
+	rating.HardCount = stats["Hard"]
+	rating.GlobalRank = stats["ranking"]
+	rating.RecordedAt = now
+	rating.StudentID = studentID
+	rating.ContestRating = contestStats.Data.UserContestRanking.Rating
+	rating.ContestCount = contestStats.Data.UserContestRanking.AttendedContestsCount
+	rating.TopPercentage = contestStats.Data.UserContestRanking.TopPercentage
+	rating.UpdatedAt = now
+
+	// Calculate overall rating (problems + contest performance)
+	problemRating := (rating.EasyCount * 1) + (rating.MediumCount * 3) + (rating.HardCount * 5)
+	contestBonus := int(rating.ContestRating * 0.2) // Contest rating contributes 20% to overall rating
+	rating.Rating = problemRating + contestBonus
+
+	// Store the rating
+	if err := s.repo.AddRating(ctx, rating); err != nil {
+		return err
+	}
+
+	// Delete existing contest history for this update
+	if err := s.repo.DeleteContestHistory(ctx, studentID); err != nil {
+		s.logger.Error("failed to delete old contest history", zap.Error(err))
+		return err
+	}
+
+	// Store contest history
+	for _, contest := range contestStats.Data.UserContestRankingHistory {
+		history := &models.ContestHistory{
+			StudentID:         studentID,
+			ContestTitle:      contest.Contest.Title,
+			Rating:            contest.Rating,
+			Ranking:           contest.Ranking,
+			Attended:          contest.Attended,
+			TrendDirection:    contest.TrendDirection,
+			ProblemsSolved:    contest.ProblemsSolved,
+			FinishTimeSeconds: contest.FinishTimeInSeconds,
+			ContestDate:       now, // We'll use current time as contest date since it's not provided in the API
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		if err := s.repo.AddContestHistory(ctx, history); err != nil {
+			s.logger.Error("failed to store contest history", zap.Error(err))
+			return err
+		}
+	}
+
 	return nil
 }
 
-// GetStudentStats retrieves a student's statistics
-func (s *StudentService) GetStudentStats(ctx context.Context, studentID uint) (*models.StudentStats, error) {
-	stats, err := s.repo.GetStudentStats(ctx, studentID)
-	if err != nil {
-		s.logger.Error("Failed to get student stats",
-			zap.Uint("student_id", studentID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	return stats, nil
+func (s *StudentService) GetStudentStats(ctx context.Context, studentID uint) (*models.Student, error) {
+	return s.repo.GetByIDWithRatings(ctx, studentID)
 }
 
-// ListStudents retrieves a paginated list of students
 func (s *StudentService) ListStudents(ctx context.Context, page, pageSize int) ([]models.Student, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 {
-		pageSize = 10
-	}
-
-	offset := (page - 1) * pageSize
-	students, err := s.repo.ListStudents(ctx, offset, pageSize)
-	if err != nil {
-		s.logger.Error("Failed to list students", zap.Error(err))
-		return nil, err
-	}
-
-	return students, nil
+	return s.repo.List(ctx, page, pageSize)
 }
 
-// validateStudent validates student data
 func (s *StudentService) validateStudent(student *models.Student) error {
 	if student.Name == "" {
 		return errors.New("student name is required")
@@ -116,4 +160,16 @@ func (s *StudentService) validateStudent(student *models.Student) error {
 		return errors.New("LeetCode ID is required")
 	}
 	return nil
+}
+
+func (s *StudentService) GetByID(ctx context.Context, studentID uint) (*models.Student, error) {
+	return s.repo.GetByID(ctx, studentID)
+}
+
+func (s *StudentService) GetLeetCodeStats(ctx context.Context, leetcodeID string) (*LeetCodeUserProfile, error) {
+	return s.leetcodeService.GetUserProfile(leetcodeID)
+}
+
+func (s *StudentService) GetContestRankings(ctx context.Context, leetcodeID string) (*ContestRankingInfo, error) {
+	return s.leetcodeService.GetContestRanking(leetcodeID)
 }

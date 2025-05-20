@@ -4,15 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/ayush/ORBIT/internal/api"
 	"github.com/ayush/ORBIT/internal/config"
-	"github.com/gin-gonic/gin"
+	"github.com/ayush/ORBIT/internal/server"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
@@ -37,32 +35,30 @@ func main() {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
 
-	router := gin.Default()
-
-	api.InitializeRoutes(router, cfg, logger, db)
-
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%s", cfg.ServerPort),
-		Handler: router,
+	// Create new server instance
+	srv, err := server.New(cfg, logger, db)
+	if err != nil {
+		logger.Fatal("Failed to create server", zap.Error(err))
 	}
 
+	// Start server in a goroutine
 	go func() {
-		logger.Info("Starting server...", zap.String("port", cfg.ServerPort))
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Start(); err != nil {
 			logger.Fatal("Failed to start server", zap.Error(err))
 		}
 	}()
 
+	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("Shutting down server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Create a deadline to wait for
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	// Gracefully shutdown the server
+	if err := srv.Stop(ctx); err != nil {
 		logger.Fatal("Server forced to shutdown:", zap.Error(err))
 	}
 
