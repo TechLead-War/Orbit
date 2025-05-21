@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"time"
 
 	"github.com/ayush/ORBIT/internal/models"
 	"gorm.io/gorm"
@@ -61,9 +60,9 @@ func (r *StudentRepository) AddRating(ctx context.Context, rating *models.Rating
 // GetStudentStats retrieves statistics for a student
 func (r *StudentRepository) GetStudentStats(ctx context.Context, studentID uint) (*models.StudentStats, error) {
 	var stats models.StudentStats
-	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
+	stats.StudentID = studentID
 
-	// Get current rating
+	// Get current rating and problems count
 	var currentRating models.Rating
 	err := r.db.WithContext(ctx).
 		Where("student_id = ?", studentID).
@@ -73,35 +72,33 @@ func (r *StudentRepository) GetStudentStats(ctx context.Context, studentID uint)
 		return nil, err
 	}
 
-	// Get rating from 30 days ago
-	var oldRating models.Rating
-	err = r.db.WithContext(ctx).
-		Where("student_id = ? AND recorded_at <= ?", studentID, thirtyDaysAgo).
-		Order("recorded_at desc").
-		First(&oldRating).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return nil, err
-	}
+	stats.CurrentRating = currentRating.Rating
+	stats.ProblemsCount = currentRating.ProblemsCount
+	stats.GlobalRank = currentRating.GlobalRank
 
-	// Calculate statistics
-	stats.StudentID = studentID
-	stats.CurrentRank = currentRating.GlobalRank
-	stats.TotalProblems = currentRating.ProblemsCount
-	stats.RatingChange30Days = currentRating.Rating - oldRating.Rating
-
-	// Calculate average rating
-	var avgRating struct {
-		Average float64
-	}
+	// Get contest statistics
+	var contestCount int64
 	err = r.db.WithContext(ctx).
-		Table("ratings").
-		Select("AVG(rating) as average").
+		Model(&models.ContestHistory{}).
 		Where("student_id = ?", studentID).
-		Scan(&avgRating).Error
+		Count(&contestCount).Error
 	if err != nil {
 		return nil, err
 	}
-	stats.AverageRating = avgRating.Average
+	stats.ContestsParticipated = int(contestCount)
+
+	// Get latest contest rating
+	var latestContest models.ContestHistory
+	err = r.db.WithContext(ctx).
+		Where("student_id = ?", studentID).
+		Order("contest_date desc").
+		First(&latestContest).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	if err == nil {
+		stats.ContestRating = latestContest.Rating
+	}
 
 	return &stats, nil
 }
@@ -157,4 +154,49 @@ func (r *StudentRepository) DeleteContestHistory(ctx context.Context, studentID 
 	return r.db.WithContext(ctx).
 		Where("student_id = ?", studentID).
 		Delete(&models.ContestHistory{}).Error
+}
+
+// GetContestStats retrieves aggregated contest statistics for a student
+func (r *StudentRepository) GetContestStats(ctx context.Context, studentID uint) (*models.ContestStats, error) {
+	var stats models.ContestStats
+	var count int64
+
+	// Get total contests participated
+	err := r.db.WithContext(ctx).
+		Model(&models.ContestHistory{}).
+		Where("student_id = ?", studentID).
+		Count(&count).Error
+	if err != nil {
+		return nil, err
+	}
+	stats.ContestsParticipated = int(count)
+
+	if stats.ContestsParticipated == 0 {
+		return &stats, nil
+	}
+
+	// Get average rating and total problems solved
+	err = r.db.WithContext(ctx).
+		Model(&models.ContestHistory{}).
+		Select("COALESCE(AVG(rating), 0) as average_rating, COALESCE(SUM(problems_solved), 0) as total_problems_solved").
+		Where("student_id = ?", studentID).
+		Scan(&stats).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Get best ranking
+	var bestContest models.ContestHistory
+	err = r.db.WithContext(ctx).
+		Where("student_id = ?", studentID).
+		Order("ranking ASC").
+		First(&bestContest).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	if err == nil {
+		stats.BestRanking = bestContest.Ranking
+	}
+
+	return &stats, nil
 }

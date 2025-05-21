@@ -26,7 +26,6 @@ func NewStudentService(repo *repository.StudentRepository, logger *zap.Logger) *
 }
 
 func (s *StudentService) RegisterStudent(ctx context.Context, student *models.Student) error {
-	// Get problem stats
 	stats, err := s.leetcodeService.GetUserStats(student.LeetcodeID)
 	if err != nil {
 		s.logger.Error("failed to fetch leetcode stats", zap.Error(err))
@@ -43,27 +42,48 @@ func (s *StudentService) RegisterStudent(ctx context.Context, student *models.St
 	now := time.Now()
 
 	rating := models.Rating{
+		StudentID:     student.ID,
 		Rating:        0,
 		ProblemsCount: stats["All"],
 		EasyCount:     stats["Easy"],
 		MediumCount:   stats["Medium"],
 		HardCount:     stats["Hard"],
 		GlobalRank:    stats["ranking"],
-		ContestRating: contestStats.Data.UserContestRanking.Rating,
-		ContestCount:  contestStats.Data.UserContestRanking.AttendedContestsCount,
-		TopPercentage: contestStats.Data.UserContestRanking.TopPercentage,
 		RecordedAt:    now,
 		CreatedAt:     now,
-		UpdatedAt:     now,
 	}
 
 	// Calculate overall rating (problems + contest performance)
 	problemRating := (rating.EasyCount * 1) + (rating.MediumCount * 3) + (rating.HardCount * 5)
-	contestBonus := int(rating.ContestRating * 0.2) // Contest rating contributes 20% to overall rating
+	contestBonus := int(contestStats.Data.UserContestRanking.Rating * 0.2) // Contest rating contributes 20% to overall rating
 	rating.Rating = problemRating + contestBonus
 
 	student.Ratings = []models.Rating{rating}
-	return s.repo.Create(ctx, student)
+
+	// Create student with initial rating
+	if err := s.repo.Create(ctx, student); err != nil {
+		return err
+	}
+
+	// Store contest history
+	for _, contest := range contestStats.Data.UserContestRankingHistory {
+		history := &models.ContestHistory{
+			StudentID:         student.ID,
+			ContestTitle:      contest.Contest.Title,
+			Rating:            contest.Rating,
+			Ranking:           contest.Ranking,
+			ProblemsSolved:    contest.ProblemsSolved,
+			FinishTimeSeconds: contest.FinishTimeInSeconds,
+			ContestDate:       now, // We'll use current time as contest date since it's not provided in the API
+			CreatedAt:         now,
+		}
+		if err := s.repo.AddContestHistory(ctx, history); err != nil {
+			s.logger.Error("failed to store contest history", zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *StudentService) UpdateStudentRating(ctx context.Context, studentID uint, rating *models.Rating) error {
@@ -79,7 +99,6 @@ func (s *StudentService) UpdateStudentRating(ctx context.Context, studentID uint
 		return fmt.Errorf("failed to fetch leetcode stats: %w", err)
 	}
 
-	// Get contest stats
 	contestStats, err := s.leetcodeService.GetContestRanking(student.LeetcodeID)
 	if err != nil {
 		s.logger.Error("failed to fetch contest stats", zap.Error(err))
@@ -88,7 +107,6 @@ func (s *StudentService) UpdateStudentRating(ctx context.Context, studentID uint
 
 	now := time.Now()
 
-	// Update rating with both problem and contest data
 	rating.ProblemsCount = stats["All"]
 	rating.EasyCount = stats["Easy"]
 	rating.MediumCount = stats["Medium"]
@@ -96,41 +114,30 @@ func (s *StudentService) UpdateStudentRating(ctx context.Context, studentID uint
 	rating.GlobalRank = stats["ranking"]
 	rating.RecordedAt = now
 	rating.StudentID = studentID
-	rating.ContestRating = contestStats.Data.UserContestRanking.Rating
-	rating.ContestCount = contestStats.Data.UserContestRanking.AttendedContestsCount
-	rating.TopPercentage = contestStats.Data.UserContestRanking.TopPercentage
-	rating.UpdatedAt = now
 
-	// Calculate overall rating (problems + contest performance)
 	problemRating := (rating.EasyCount * 1) + (rating.MediumCount * 3) + (rating.HardCount * 5)
-	contestBonus := int(rating.ContestRating * 0.2) // Contest rating contributes 20% to overall rating
+	contestBonus := int(contestStats.Data.UserContestRanking.Rating * 0.2) // Contest rating contributes 20% to overall rating
 	rating.Rating = problemRating + contestBonus
 
-	// Store the rating
 	if err := s.repo.AddRating(ctx, rating); err != nil {
 		return err
 	}
 
-	// Delete existing contest history for this update
 	if err := s.repo.DeleteContestHistory(ctx, studentID); err != nil {
 		s.logger.Error("failed to delete old contest history", zap.Error(err))
 		return err
 	}
 
-	// Store contest history
 	for _, contest := range contestStats.Data.UserContestRankingHistory {
 		history := &models.ContestHistory{
 			StudentID:         studentID,
 			ContestTitle:      contest.Contest.Title,
 			Rating:            contest.Rating,
 			Ranking:           contest.Ranking,
-			Attended:          contest.Attended,
-			TrendDirection:    contest.TrendDirection,
 			ProblemsSolved:    contest.ProblemsSolved,
 			FinishTimeSeconds: contest.FinishTimeInSeconds,
-			ContestDate:       now, // We'll use current time as contest date since it's not provided in the API
+			ContestDate:       now,
 			CreatedAt:         now,
-			UpdatedAt:         now,
 		}
 		if err := s.repo.AddContestHistory(ctx, history); err != nil {
 			s.logger.Error("failed to store contest history", zap.Error(err))
@@ -142,7 +149,19 @@ func (s *StudentService) UpdateStudentRating(ctx context.Context, studentID uint
 }
 
 func (s *StudentService) GetStudentStats(ctx context.Context, studentID uint) (*models.Student, error) {
-	return s.repo.GetByIDWithRatings(ctx, studentID)
+	student, err := s.repo.GetByIDWithRatings(ctx, studentID)
+	if err != nil {
+		return nil, err
+	}
+
+	contestStats, err := s.repo.GetContestStats(ctx, studentID)
+	if err != nil {
+		s.logger.Error("failed to fetch contest stats", zap.Error(err))
+	} else {
+		student.ContestStats = contestStats
+	}
+
+	return student, nil
 }
 
 func (s *StudentService) ListStudents(ctx context.Context, page, pageSize int) ([]models.Student, error) {

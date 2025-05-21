@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS contest_history (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    contest_title VARCHAR(255) NOT NULL,
+    rating FLOAT NOT NULL,
+    ranking INTEGER NOT NULL,
+    attended BOOLEAN NOT NULL DEFAULT true,
+    trend_direction VARCHAR(10),
+    problems_solved INTEGER NOT NULL DEFAULT 0,
+    finish_time_seconds INTEGER NOT NULL DEFAULT 0,
+    contest_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+); 

@@ -1,30 +1,34 @@
 CREATE TABLE students (
+    id         SERIAL PRIMARY KEY,
+    name       VARCHAR(50) NOT NULL,
+    email      VARCHAR(50) UNIQUE NOT NULL,
+    leetcode_id VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE ratings (
     id             SERIAL PRIMARY KEY,
-    name           VARCHAR(50) NOT NULL,
-    email          VARCHAR(50) UNIQUE NOT NULL,
-    profile_link   TEXT,
-    current_rating INT,
-    passing_year  INT,
-    created_at     TIMESTAMPTZ DEFAULT NOW()
+    student_id     INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    rating         INT NOT NULL,
+    problems_count INT NOT NULL,
+    easy_count     INT NOT NULL,
+    medium_count   INT NOT NULL,
+    hard_count     INT NOT NULL,
+    global_rank    INT NOT NULL,
+    recorded_at    TIMESTAMPTZ NOT NULL,
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(student_id, recorded_at)
 );
 
-CREATE TABLE weekly_progress (
-    id                SERIAL PRIMARY KEY,
-    student_id        INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-    week_start        DATE NOT NULL,
-    questions_solved  INT DEFAULT 0,
-    submissions_count INT DEFAULT 0,
-    rating_delta      INT DEFAULT 0,
-    suspected_cheat   BOOLEAN DEFAULT FALSE,
-    UNIQUE(student_id, week_start)
-);
-
-CREATE TABLE contest_participation (
-    id            SERIAL PRIMARY KEY,
-    student_id    INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-    contest_name  VARCHAR(100),
-    contest_date  DATE NOT NULL,
-    rating_before INT,
-    rating_after  INT,
-    rating_change INT
+CREATE TABLE contest_history (
+    id                  SERIAL PRIMARY KEY,
+    student_id         INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    contest_title      VARCHAR(100) NOT NULL,
+    rating             FLOAT NOT NULL,
+    ranking           INT NOT NULL,
+    problems_solved    INT NOT NULL,
+    finish_time_seconds INT,
+    contest_date       TIMESTAMPTZ NOT NULL,
+    created_at         TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(student_id, contest_title)
 );
