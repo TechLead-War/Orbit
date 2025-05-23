@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"orbit/models"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ayush/ORBIT/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/xuri/excelize/v2"
@@ -97,7 +98,7 @@ func (h *Handler) BulkCreateStudents(c *gin.Context) {
 		FileSize:     file.Size,
 		StoragePath:  filepath,
 		Status:       "processing",
-		UploadedBy:   1, // TODO: Get from authenticated user
+		UploadedBy:   nil,
 	}
 
 	if err := h.db.CreateFileUpload(fileUpload); err != nil {
