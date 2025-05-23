@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ayush/ORBIT/internal/leetcode"
 	"github.com/ayush/ORBIT/internal/models"
 	"github.com/ayush/ORBIT/internal/repository"
 	"go.uber.org/zap"
@@ -42,7 +43,7 @@ func (s *StudentService) RegisterStudent(ctx context.Context, student *models.St
 	now := time.Now()
 
 	rating := models.Rating{
-		StudentID:     student.ID,
+		StudentID:     uint(student.ID),
 		Rating:        0,
 		ProblemsCount: stats["All"],
 		EasyCount:     stats["Easy"],
@@ -68,7 +69,7 @@ func (s *StudentService) RegisterStudent(ctx context.Context, student *models.St
 	// Store contest history
 	for _, contest := range contestStats.Data.UserContestRankingHistory {
 		history := &models.ContestHistory{
-			StudentID:         student.ID,
+			StudentID:         uint(student.ID),
 			ContestTitle:      contest.Contest.Title,
 			Rating:            contest.Rating,
 			Ranking:           contest.Ranking,
@@ -130,7 +131,7 @@ func (s *StudentService) UpdateStudentRating(ctx context.Context, studentID uint
 
 	for _, contest := range contestStats.Data.UserContestRankingHistory {
 		history := &models.ContestHistory{
-			StudentID:         studentID,
+			StudentID:         uint(studentID),
 			ContestTitle:      contest.Contest.Title,
 			Rating:            contest.Rating,
 			Ranking:           contest.Ranking,
@@ -165,7 +166,24 @@ func (s *StudentService) GetStudentStats(ctx context.Context, studentID uint) (*
 }
 
 func (s *StudentService) ListStudents(ctx context.Context, page, pageSize int) ([]models.Student, error) {
-	return s.repo.List(ctx, page, pageSize)
+	students, err := s.repo.List(ctx, page, pageSize)
+	if err != nil {
+		s.logger.Error("failed to list students", zap.Error(err))
+		return nil, fmt.Errorf("failed to list students: %w", err)
+	}
+
+	// Get contest stats for each student
+	for i := range students {
+		if contestStats, err := s.repo.GetContestStats(ctx, students[i].ID); err == nil {
+			students[i].ContestStats = contestStats
+		} else {
+			s.logger.Error("failed to get contest stats for student",
+				zap.Uint("student_id", students[i].ID),
+				zap.Error(err))
+		}
+	}
+
+	return students, nil
 }
 
 func (s *StudentService) validateStudent(student *models.Student) error {
@@ -185,10 +203,10 @@ func (s *StudentService) GetByID(ctx context.Context, studentID uint) (*models.S
 	return s.repo.GetByID(ctx, studentID)
 }
 
-func (s *StudentService) GetLeetCodeStats(ctx context.Context, leetcodeID string) (*LeetCodeUserProfile, error) {
+func (s *StudentService) GetLeetCodeStats(ctx context.Context, leetcodeID string) (*leetcode.UserProfile, error) {
 	return s.leetcodeService.GetUserProfile(leetcodeID)
 }
 
-func (s *StudentService) GetContestRankings(ctx context.Context, leetcodeID string) (*ContestRankingInfo, error) {
+func (s *StudentService) GetContestRankings(ctx context.Context, leetcodeID string) (*leetcode.ContestRankingInfo, error) {
 	return s.leetcodeService.GetContestRanking(leetcodeID)
 }

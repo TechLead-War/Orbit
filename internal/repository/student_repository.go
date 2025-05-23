@@ -2,27 +2,25 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/ayush/ORBIT/internal/leetcode"
 	"github.com/ayush/ORBIT/internal/models"
 	"gorm.io/gorm"
 )
 
-// StudentRepository handles all database operations for students
 type StudentRepository struct {
 	db *gorm.DB
 }
 
-// NewStudentRepository creates a new student repository
 func NewStudentRepository(db *gorm.DB) *StudentRepository {
 	return &StudentRepository{db: db}
 }
 
-// Create adds a new student to the database
 func (r *StudentRepository) Create(ctx context.Context, student *models.Student) error {
 	return r.db.WithContext(ctx).Create(student).Error
 }
 
-// GetByID retrieves a student by their ID
 func (r *StudentRepository) GetByID(ctx context.Context, id uint) (*models.Student, error) {
 	var student models.Student
 	err := r.db.WithContext(ctx).First(&student, id).Error
@@ -32,7 +30,6 @@ func (r *StudentRepository) GetByID(ctx context.Context, id uint) (*models.Stude
 	return &student, nil
 }
 
-// GetByLeetcodeID retrieves a student by their LeetCode ID
 func (r *StudentRepository) GetByLeetcodeID(ctx context.Context, leetcodeID string) (*models.Student, error) {
 	var student models.Student
 	err := r.db.WithContext(ctx).Where("leetcode_id = ?", leetcodeID).First(&student).Error
@@ -103,7 +100,6 @@ func (r *StudentRepository) GetStudentStats(ctx context.Context, studentID uint)
 	return &stats, nil
 }
 
-// ListStudents retrieves a paginated list of students
 func (r *StudentRepository) ListStudents(ctx context.Context, offset, limit int) ([]models.Student, error) {
 	var students []models.Student
 	err := r.db.WithContext(ctx).
@@ -127,7 +123,15 @@ func (r *StudentRepository) GetByIDWithRatings(ctx context.Context, id uint) (*m
 func (r *StudentRepository) List(ctx context.Context, page, pageSize int) ([]models.Student, error) {
 	var students []models.Student
 	offset := (page - 1) * pageSize
-	err := r.db.WithContext(ctx).Offset(offset).Limit(pageSize).Find(&students).Error
+
+	err := r.db.WithContext(ctx).
+		Preload("Ratings", func(db *gorm.DB) *gorm.DB {
+			return db.Order("recorded_at DESC").Limit(1)
+		}).
+		Offset(offset).
+		Limit(pageSize).
+		Find(&students).Error
+
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +179,6 @@ func (r *StudentRepository) GetContestStats(ctx context.Context, studentID uint)
 		return &stats, nil
 	}
 
-	// Get average rating and total problems solved
 	err = r.db.WithContext(ctx).
 		Model(&models.ContestHistory{}).
 		Select("COALESCE(AVG(rating), 0) as average_rating, COALESCE(SUM(problems_solved), 0) as total_problems_solved").
@@ -199,4 +202,47 @@ func (r *StudentRepository) GetContestStats(ctx context.Context, studentID uint)
 	}
 
 	return &stats, nil
+}
+
+func (r *StudentRepository) GetLeetCodeStats(ctx context.Context, leetcodeID string) (*models.LeetCodeStats, error) {
+	// Create a LeetCode service instance
+	leetcodeService := leetcode.NewService()
+
+	// Get user profile from LeetCode API
+	profile, err := leetcodeService.GetUserProfile(leetcodeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get LeetCode profile: %w", err)
+	}
+
+	// Get contest ranking
+	contestInfo, err := leetcodeService.GetContestRanking(leetcodeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contest ranking: %w", err)
+	}
+
+	// Map the data to our stats model
+	stats := &models.LeetCodeStats{
+		TotalSolved:    0,
+		EasySolved:     0,
+		MediumSolved:   0,
+		HardSolved:     0,
+		ContestRating:  contestInfo.Data.UserContestRanking.Rating,
+		ContestRanking: contestInfo.Data.UserContestRanking.GlobalRanking,
+	}
+
+	// Map submission stats
+	for _, submission := range profile.Data.MatchedUser.SubmitStats.AcSubmissionNum {
+		count := submission.Count
+		switch submission.Difficulty {
+		case "Easy":
+			stats.EasySolved = count
+		case "Medium":
+			stats.MediumSolved = count
+		case "Hard":
+			stats.HardSolved = count
+		}
+	}
+	stats.TotalSolved = stats.EasySolved + stats.MediumSolved + stats.HardSolved
+
+	return stats, nil
 }

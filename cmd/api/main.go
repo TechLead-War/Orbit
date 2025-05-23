@@ -1,15 +1,16 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/ayush/ORBIT/internal/config"
+	"github.com/ayush/ORBIT/internal/database"
+	"github.com/ayush/ORBIT/internal/handlers"
+	"github.com/ayush/ORBIT/internal/jobs"
+	"github.com/ayush/ORBIT/internal/repository"
 	"github.com/ayush/ORBIT/internal/server"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -19,7 +20,7 @@ import (
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Printf("Warning: .env file not found")
+		log.Fatal("Error loading .env file")
 	}
 
 	logger, _ := zap.NewProduction()
@@ -35,32 +36,22 @@ func main() {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
 	}
 
-	// Create new server instance
-	srv, err := server.New(cfg, logger, db)
-	if err != nil {
-		logger.Fatal("Failed to create server", zap.Error(err))
+	studentRepo := repository.NewStudentRepository(db)
+	dbService := database.NewDatabase(db)
+	handler := handlers.NewHandler(dbService)
+
+	ratingUpdater := jobs.NewRatingUpdater(studentRepo, logger, 7*24*time.Hour)
+	ratingUpdater.Start()
+	defer ratingUpdater.Stop()
+
+	router := server.SetupRouter(handler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	// Start server in a goroutine
-	go func() {
-		if err := srv.Start(); err != nil {
-			logger.Fatal("Failed to start server", zap.Error(err))
-		}
-	}()
-
-	// Wait for interrupt signal to gracefully shutdown the server
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	// Create a deadline to wait for
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	// Gracefully shutdown the server
-	if err := srv.Stop(ctx); err != nil {
-		logger.Fatal("Server forced to shutdown:", zap.Error(err))
+	if err := router.Run(":" + port); err != nil {
+		logger.Fatal("Failed to start server", zap.Error(err))
 	}
-
-	logger.Info("Server exiting")
 }
