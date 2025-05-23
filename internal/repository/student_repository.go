@@ -246,3 +246,16 @@ func (r *StudentRepository) GetLeetCodeStats(ctx context.Context, leetcodeID str
 
 	return stats, nil
 }
+
+// AddContestHistories adds multiple contest history records for a student in a single transaction
+func (r *StudentRepository) AddContestHistories(ctx context.Context, studentID uint, histories []*models.ContestHistory) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, history := range histories {
+			history.StudentID = studentID
+			if err := tx.Create(history).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

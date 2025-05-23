@@ -201,3 +201,20 @@ func (d *Database) GetStudentWithStats(id uint) (*models.Student, error) {
 
 	return &student, nil
 }
+
+func (d *Database) DeleteContestHistory(studentID uint) error {
+	return d.db.Where("student_id = ?", studentID).Delete(&models.ContestHistory{}).Error
+}
+
+func (d *Database) AddContestHistories(studentID uint, histories []*models.ContestHistory) error {
+	// Use a transaction to ensure all histories are added or none
+	return d.db.Transaction(func(tx *gorm.DB) error {
+		for _, history := range histories {
+			history.StudentID = studentID
+			if err := tx.Create(history).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

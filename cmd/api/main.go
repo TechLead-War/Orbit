@@ -40,9 +40,15 @@ func main() {
 	dbService := database.NewDatabase(db)
 	handler := handlers.NewHandler(dbService)
 
-	ratingUpdater := jobs.NewRatingUpdater(studentRepo, logger, 7*24*time.Hour)
+	// Initialize rating updater with weekly interval
+	ratingUpdater := jobs.NewRatingUpdater(studentRepo, logger, 7*24*time.Hour) // 7 days
 	ratingUpdater.Start()
 	defer ratingUpdater.Stop()
+
+	// Initialize contest history updater with weekly interval
+	contestHistoryUpdater := jobs.NewContestHistoryUpdater(studentRepo, logger, 7*24*time.Hour) // 7 days
+	contestHistoryUpdater.Start()
+	defer contestHistoryUpdater.Stop()
 
 	router := server.SetupRouter(handler)
 

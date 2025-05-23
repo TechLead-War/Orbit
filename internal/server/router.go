@@ -17,6 +17,8 @@ func SetupRouter(h *handlers.Handler) *gin.Engine {
 			students.GET("", h.ListStudents)
 			students.GET("/:id", h.GetStudent)
 			students.PUT("/:id/rating", h.UpdateStudentRating)
+			students.PUT("/:id/contest-history", h.UpdateContestHistory)
+			students.PUT("/contest-history/update-all", h.UpdateAllContestHistories)
 			students.GET("/:id/leetcode", h.GetLeetCodeStats)
 			students.GET("/:id/contest-rankings", h.GetContestRankings)
 		}

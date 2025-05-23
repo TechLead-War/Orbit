@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ayush/ORBIT/internal/leetcode"
 	"github.com/ayush/ORBIT/internal/models"
 	"github.com/gin-gonic/gin"
 	"github.com/xuri/excelize/v2"
@@ -32,6 +33,8 @@ type Database interface {
 	UpdateStudentRating(studentID uint, rating *models.Rating) error
 	GetLeetCodeStats(leetcodeID string) (*models.LeetCodeStats, error)
 	GetContestRankings(studentID uint) ([]*models.ContestHistory, error)
+	DeleteContestHistory(studentID uint) error
+	AddContestHistories(studentID uint, histories []*models.ContestHistory) error
 }
 
 const (
@@ -417,4 +420,150 @@ func (h *Handler) GetContestRankings(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, rankings)
+}
+
+func (h *Handler) UpdateContestHistory(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid student ID"})
+		return
+	}
+
+	// Get student to get their LeetCode ID
+	student, err := h.db.GetStudent(uint(id))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "student not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Create LeetCode service
+	leetcodeService := leetcode.NewService()
+
+	// Get fresh contest stats
+	contestStats, err := leetcodeService.GetContestRanking(student.LeetcodeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch LeetCode contest stats",
+			"details": "Could not retrieve contest data from LeetCode API. This could be due to:" +
+				"\n- Invalid LeetCode username" +
+				"\n- LeetCode API rate limiting" +
+				"\n- LeetCode API being unavailable",
+			"technical_error": err.Error(),
+		})
+		return
+	}
+
+	// Delete existing contest history
+	if err := h.db.DeleteContestHistory(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete existing contest history"})
+		return
+	}
+
+	now := time.Now()
+	var histories []*models.ContestHistory
+
+	// Create new contest history entries
+	for _, contest := range contestStats.Data.UserContestRankingHistory {
+		history := &models.ContestHistory{
+			StudentID:         uint(id),
+			ContestTitle:      contest.Contest.Title,
+			Rating:            contest.Rating,
+			Ranking:           contest.Ranking,
+			ProblemsSolved:    contest.ProblemsSolved,
+			FinishTimeSeconds: contest.FinishTimeInSeconds,
+			ContestDate:       now,
+			CreatedAt:         now,
+		}
+		histories = append(histories, history)
+	}
+
+	// Add new contest histories
+	if err := h.db.AddContestHistories(uint(id), histories); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add contest histories"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Contest histories updated successfully",
+		"count":   len(histories),
+	})
+}
+
+func (h *Handler) UpdateAllContestHistories(c *gin.Context) {
+	// Create LeetCode service
+	leetcodeService := leetcode.NewService()
+
+	// Get all students (paginated)
+	page := 1
+	pageSize := 10
+	var processedCount int
+	var failedCount int
+
+	for {
+		students, err := h.db.ListStudents(page, pageSize)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch students"})
+			return
+		}
+
+		if len(students) == 0 {
+			break // No more students to process
+		}
+
+		// Process each student in the batch
+		for _, student := range students {
+			// Get fresh contest stats
+			contestStats, err := leetcodeService.GetContestRanking(student.LeetcodeID)
+			if err != nil {
+				failedCount++
+				continue
+			}
+
+			// Delete existing contest history
+			if err := h.db.DeleteContestHistory(student.ID); err != nil {
+				failedCount++
+				continue
+			}
+
+			now := time.Now()
+			var histories []*models.ContestHistory
+
+			// Create new contest history entries
+			for _, contest := range contestStats.Data.UserContestRankingHistory {
+				history := &models.ContestHistory{
+					StudentID:         student.ID,
+					ContestTitle:      contest.Contest.Title,
+					Rating:            contest.Rating,
+					Ranking:           contest.Ranking,
+					ProblemsSolved:    contest.ProblemsSolved,
+					FinishTimeSeconds: contest.FinishTimeInSeconds,
+					ContestDate:       now,
+					CreatedAt:         now,
+				}
+				histories = append(histories, history)
+			}
+
+			// Add new contest histories
+			if err := h.db.AddContestHistories(student.ID, histories); err != nil {
+				failedCount++
+				continue
+			}
+
+			processedCount++
+			// Add a small delay to avoid rate limiting
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		page++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":         "Contest histories update completed",
+		"processed_count": processedCount,
+		"failed_count":    failedCount,
+	})
 }
