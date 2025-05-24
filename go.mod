@@ -6,17 +6,21 @@ toolchain go1.23.5
 
 require (
 	github.com/gin-gonic/gin v1.9.1
-	github.com/joho/godotenv v1.5.1
+	github.com/go-redis/redis/v8 v8.11.5
+	github.com/google/uuid v1.6.0
 	github.com/xuri/excelize/v2 v2.8.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/time v0.11.0
 	gorm.io/driver/postgres v1.5.11
-	gorm.io/gorm v1.25.10
+	gorm.io/gorm v1.26.1
 )
 
 require (
 	github.com/bytedance/sonic v1.10.2 // indirect
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
 	github.com/chenzhuoyu/iasm v0.9.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -48,10 +52,9 @@ require (
 	golang.org/x/arch v0.7.0 // indirect
 	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/net v0.20.0 // indirect
-	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/time v0.11.0 // indirect
+	golang.org/x/text v0.20.0 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

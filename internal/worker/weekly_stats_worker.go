@@ -9,7 +9,7 @@ import (
 )
 
 type StudentDB interface {
-	GetAllStudents() ([]models.Student, error)
+	GetAllStudents() ([]*models.Student, error)
 }
 
 type WeeklyStatsDB interface {
@@ -73,7 +73,9 @@ func (w *WeeklyStatsWorker) UpdateAllStudentsStats() {
 			EasyCount:     stats.EasyCount,
 			MediumCount:   stats.MediumCount,
 			HardCount:     stats.HardCount,
-			TotalCount:    stats.TotalSolved,
+			ProblemsCount: stats.TotalSolved,
+			ContestRating: stats.ContestRating,
+			GlobalRanking: stats.ContestRanking,
 		}
 
 		// Check if stats already exist for this week

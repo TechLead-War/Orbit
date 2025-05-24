@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ayush/ORBIT/internal/leetcode"
@@ -196,7 +197,12 @@ func (d *Database) GetStudentWithStats(id uint) (*models.Student, error) {
 		Order("contest_date desc").
 		Find(&contestHistory).Error
 	if err == nil {
-		student.ContestHistory = contestHistory
+		// Convert []*models.ContestHistory to []models.ContestHistory
+		var ch []models.ContestHistory
+		for _, v := range contestHistory {
+			ch = append(ch, *v)
+		}
+		student.ContestHistory = ch
 	}
 
 	return &student, nil
@@ -217,4 +223,116 @@ func (d *Database) AddContestHistories(studentID uint, histories []*models.Conte
 		}
 		return nil
 	})
+}
+
+type FileUploadDB struct {
+	db *gorm.DB
+}
+
+func NewFileUploadDB(db *gorm.DB) *FileUploadDB {
+	return &FileUploadDB{db: db}
+}
+
+func (d *FileUploadDB) Create(ctx context.Context, upload *models.FileUpload) error {
+	return d.db.WithContext(ctx).Create(upload).Error
+}
+
+func (d *FileUploadDB) GetByID(ctx context.Context, id uint) (*models.FileUpload, error) {
+	var upload models.FileUpload
+	if err := d.db.WithContext(ctx).First(&upload, id).Error; err != nil {
+		return nil, fmt.Errorf("failed to get file upload: %w", err)
+	}
+	return &upload, nil
+}
+
+func (d *FileUploadDB) Update(ctx context.Context, upload *models.FileUpload) error {
+	return d.db.WithContext(ctx).Save(upload).Error
+}
+
+func (d *FileUploadDB) Delete(ctx context.Context, id uint) error {
+	return d.db.WithContext(ctx).Delete(&models.FileUpload{}, id).Error
+}
+
+type BatchStatsDB struct {
+	db *gorm.DB
+}
+
+func NewBatchStatsDB(db *gorm.DB) *BatchStatsDB {
+	return &BatchStatsDB{db: db}
+}
+
+func (d *BatchStatsDB) Create(ctx context.Context, stats *models.BatchStats) error {
+	return d.db.WithContext(ctx).Create(stats).Error
+}
+
+func (d *BatchStatsDB) GetByBatch(ctx context.Context, batch string) (*models.BatchStats, error) {
+	var stats models.BatchStats
+	if err := d.db.WithContext(ctx).Where("batch = ?", batch).First(&stats).Error; err != nil {
+		return nil, fmt.Errorf("failed to get batch stats: %w", err)
+	}
+	return &stats, nil
+}
+
+func (d *BatchStatsDB) Update(ctx context.Context, stats *models.BatchStats) error {
+	return d.db.WithContext(ctx).Save(stats).Error
+}
+
+func (d *BatchStatsDB) Delete(ctx context.Context, batch string) error {
+	return d.db.WithContext(ctx).Where("batch = ?", batch).Delete(&models.BatchStats{}).Error
+}
+
+type DepartmentStatsDB struct {
+	db *gorm.DB
+}
+
+func NewDepartmentStatsDB(db *gorm.DB) *DepartmentStatsDB {
+	return &DepartmentStatsDB{db: db}
+}
+
+func (d *DepartmentStatsDB) Create(ctx context.Context, stats *models.DepartmentStats) error {
+	return d.db.WithContext(ctx).Create(stats).Error
+}
+
+func (d *DepartmentStatsDB) GetByDepartment(ctx context.Context, department string) (*models.DepartmentStats, error) {
+	var stats models.DepartmentStats
+	if err := d.db.WithContext(ctx).Where("department = ?", department).First(&stats).Error; err != nil {
+		return nil, fmt.Errorf("failed to get department stats: %w", err)
+	}
+	return &stats, nil
+}
+
+func (d *DepartmentStatsDB) Update(ctx context.Context, stats *models.DepartmentStats) error {
+	return d.db.WithContext(ctx).Save(stats).Error
+}
+
+func (d *DepartmentStatsDB) Delete(ctx context.Context, department string) error {
+	return d.db.WithContext(ctx).Where("department = ?", department).Delete(&models.DepartmentStats{}).Error
+}
+
+type SystemStatsDB struct {
+	db *gorm.DB
+}
+
+func NewSystemStatsDB(db *gorm.DB) *SystemStatsDB {
+	return &SystemStatsDB{db: db}
+}
+
+func (d *SystemStatsDB) Create(ctx context.Context, stats *models.SystemStats) error {
+	return d.db.WithContext(ctx).Create(stats).Error
+}
+
+func (d *SystemStatsDB) GetLatest(ctx context.Context) (*models.SystemStats, error) {
+	var stats models.SystemStats
+	if err := d.db.WithContext(ctx).Order("created_at DESC").First(&stats).Error; err != nil {
+		return nil, fmt.Errorf("failed to get system stats: %w", err)
+	}
+	return &stats, nil
+}
+
+func (d *SystemStatsDB) Update(ctx context.Context, stats *models.SystemStats) error {
+	return d.db.WithContext(ctx).Save(stats).Error
+}
+
+func (d *SystemStatsDB) Delete(ctx context.Context, id uint) error {
+	return d.db.WithContext(ctx).Delete(&models.SystemStats{}, id).Error
 }

@@ -66,15 +66,17 @@ func (s *Service) GetUserProfile(username string) (*UserProfile, error) {
 		"query": `
 			query getUserProfile($username: String!) {
 				matchedUser(username: $username) {
-					profile {
-						realName
-						ranking
-					}
 					submitStats {
 						acSubmissionNum {
 							difficulty
 							count
+							submissions
 						}
+					}
+					profile {
+						ranking
+						reputation
+						starRating
 					}
 				}
 			}
@@ -95,13 +97,23 @@ func (s *Service) GetUserProfile(username string) (*UserProfile, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("leetcode user not found: %s", username)
+	}
+
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, fmt.Errorf("leetcode API rate limit exceeded")
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("leetcode API returned non-200 status code: %d", resp.StatusCode)
@@ -110,10 +122,6 @@ func (s *Service) GetUserProfile(username string) (*UserProfile, error) {
 	var profile UserProfile
 	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if profile.Data.MatchedUser.Profile.Ranking == 0 {
-		return nil, fmt.Errorf("user not found or has no submissions")
 	}
 
 	return &profile, nil
@@ -151,15 +159,16 @@ func (s *Service) GetContestRanking(username string) (*ContestRankingInfo, error
 					topPercentage
 				}
 				userContestRankingHistory(username: $username) {
-					contest {
-						title
-					}
-					rating
-					ranking
 					attended
 					trendDirection
 					problemsSolved
-					finishTimeInSeconds
+					totalProblems
+					rating
+					ranking
+					contest {
+						title
+						startTime
+					}
 				}
 			}
 		`,
@@ -179,13 +188,23 @@ func (s *Service) GetContestRanking(username string) (*ContestRankingInfo, error
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("leetcode user not found: %s", username)
+	}
+
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, fmt.Errorf("leetcode API rate limit exceeded")
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("leetcode API returned non-200 status code: %d", resp.StatusCode)

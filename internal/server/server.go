@@ -9,6 +9,8 @@ import (
 	"github.com/ayush/ORBIT/handlers"
 	"github.com/ayush/ORBIT/internal/config"
 	"github.com/ayush/ORBIT/internal/database"
+	"github.com/ayush/ORBIT/internal/middleware"
+	"github.com/ayush/ORBIT/internal/router"
 	"github.com/ayush/ORBIT/internal/worker"
 	"github.com/ayush/ORBIT/pkg/leetcode"
 	"github.com/gin-gonic/gin"
@@ -40,37 +42,17 @@ func New(cfg *config.Config, logger *zap.Logger) (*Server, error) {
 	leetcodeClient := leetcode.NewClient()
 
 	// Initialize handlers
-	studentHandler := handlers.NewHandler(studentDB)
-	weeklyStatsHandler := handlers.NewWeeklyStatsHandler(studentDB, leetcodeClient)
+	studentHandler := handlers.NewHandler(studentDB, logger)
+	weeklyStatsHandler := handlers.NewWeeklyStatsHandler(studentDB, leetcodeClient, logger)
 
 	// Initialize weekly stats worker
 	statsWorker := worker.NewWeeklyStatsWorker(studentDB, weeklyStatsDB, leetcodeClient)
 
-	// Setup router
-	r := gin.Default()
-	v1 := r.Group("/api/v1")
-	{
-		students := v1.Group("/students")
-		{
-			// Basic student operations
-			students.GET("", studentHandler.GetAllStudents)
-			students.POST("", studentHandler.CreateStudent)
-			students.POST("/bulk", studentHandler.BulkCreateStudents)
-			students.GET("/:id", studentHandler.GetStudentDetails)
+	// Setup router using the router package
+	r := router.SetupRouter(studentHandler, weeklyStatsHandler)
 
-			// Weekly stats routes
-			students.GET("/:id/weekly-stats", weeklyStatsHandler.GetStudentWeeklyStats)
-			students.GET("/:id/current-week", weeklyStatsHandler.GetCurrentWeekStats)
-			students.PUT("/:id/weekly-stats", weeklyStatsHandler.UpdateWeeklyStats)
-			students.POST("/:id/weekly-stats/leetcode", weeklyStatsHandler.UpdateWeeklyStatsFromLeetCode)
-			students.PUT("/weekly-stats/update-all", weeklyStatsHandler.UpdateAllWeeklyStats)
-
-			// Contest history routes
-			students.GET("/:id/contest-history", studentHandler.GetContestHistory)
-			students.PUT("/:id/contest-history", studentHandler.UpdateContestHistory)
-			students.PUT("/contest-history/update-all", studentHandler.UpdateAllContestHistories)
-		}
-	}
+	// Add middlewares
+	r.Use(middleware.RequestID())
 
 	server := &Server{
 		config:      cfg,
