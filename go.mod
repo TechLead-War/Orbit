@@ -1,6 +1,6 @@
 module github.com/ayush/ORBIT
 
-go 1.23
+go 1.23.0
 
 toolchain go1.23.5
 
@@ -51,6 +51,7 @@ require (
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/time v0.11.0 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -7,7 +7,7 @@
 	},
 	"item": [
 		{
-			"name": "Students",
+			"name": "Student Management",
 			"item": [
 				{
 					"name": "Create Student",
@@ -21,56 +21,178 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"name\": \"Ayush Kapri\",\n    \"email\": \"ayush.kapri@example.com\",\n    \"leetcode_id\": \"ayushkapri\"\n}"
+							"raw": "{\n    \"student_id\": \"2021BCS0001\",\n    \"name\": \"John Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"leetcode_id\": \"johndoe123\",\n    \"passing_year\": 2025\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/students",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "students"]
 						},
-						"description": "Register a new student in the system"
+						"description": "Create a new student in the system"
 					}
 				},
 				{
-					"name": "List Students",
+					"name": "Bulk Create Students",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/students.xlsx",
+									"description": "Excel or CSV file containing student data"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/bulk",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", "bulk"]
+						},
+						"description": "Bulk create students from Excel or CSV file"
+					}
+				},
+				{
+					"name": "Get All Students",
 					"request": {
 						"method": "GET",
-						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/v1/students?page=1&page_size=10",
+							"raw": "{{base_url}}/api/v1/students?page=1&page_size=60",
 							"host": ["{{base_url}}"],
 							"path": ["api", "v1", "students"],
 							"query": [
 								{
 									"key": "page",
-									"value": "1",
-									"description": "Page number"
+									"value": "1"
 								},
 								{
 									"key": "page_size",
-									"value": "10",
-									"description": "Number of items per page"
+									"value": "60"
 								}
 							]
 						},
-						"description": "Get a paginated list of students"
-					}
+						"description": "Get a paginated list of all students with their latest ratings, including total problems solved (easy, medium, hard) and current rating"
+					},
+					"response": [
+						{
+							"name": "Example Response",
+							"originalRequest": {
+								"method": "GET",
+								"url": {
+									"raw": "{{base_url}}/api/v1/students?page=1&page_size=60",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "students"],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "page_size",
+											"value": "60"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": {
+								"page": 1,
+								"page_size": 60,
+								"students": [
+									{
+										"student_id": "2021BCS0001",
+										"name": "John Doe",
+										"email": "john.doe@example.com",
+										"leetcode_id": "johndoe123",
+										"passing_year": 2025,
+										"created_at": "2024-03-20T10:00:00Z",
+										"rating": 1500,
+										"total_problems": 100,
+										"easy_problems": 40,
+										"medium_problems": 40,
+										"hard_problems": 20,
+										"global_rank": 10000
+									}
+								]
+							}
+						}
+					]
 				},
 				{
-					"name": "Get Student",
+					"name": "Get Student Details",
 					"request": {
 						"method": "GET",
-						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/v1/students/1",
+							"raw": "{{base_url}}/api/v1/students/:id",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "students", "1"]
+							"path": ["api", "v1", "students", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "181",
+									"description": "Student ID"
+								}
+							]
 						},
-						"description": "Get details of a specific student"
+						"description": "Get detailed information about a specific student"
+					}
+				}
+			]
+		},
+		{
+			"name": "Weekly Stats",
+			"item": [
+				{
+					"name": "Get Student Weekly Stats",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/:id/weekly-stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", ":id", "weekly-stats"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "181",
+									"description": "Student ID"
+								}
+							]
+						},
+						"description": "Get all weekly statistics for a student"
 					}
 				},
 				{
-					"name": "Update Student Rating",
+					"name": "Get Current Week Stats",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/:id/current-week",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", ":id", "current-week"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "181",
+									"description": "Student ID"
+								}
+							]
+						},
+						"description": "Get current week's statistics for a student"
+					}
+				},
+				{
+					"name": "Update Weekly Stats",
 					"request": {
 						"method": "PUT",
 						"header": [
@@ -81,27 +203,88 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"rating\": 1500,\n    \"problems_count\": 100,\n    \"easy_count\": 40,\n    \"medium_count\": 40,\n    \"hard_count\": 20,\n    \"contest_rating\": 1600,\n    \"global_rank\": 10000\n}"
+							"raw": "{\n    \"week_start_date\": \"2024-03-18T00:00:00Z\",\n    \"week_end_date\": \"2024-03-24T23:59:59Z\",\n    \"easy_count\": 5,\n    \"medium_count\": 3,\n    \"hard_count\": 1,\n    \"total_count\": 9\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/students/1/rating",
+							"raw": "{{base_url}}/api/v1/students/:id/weekly-stats",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "students", "1", "rating"]
+							"path": ["api", "v1", "students", ":id", "weekly-stats"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "181",
+									"description": "Student ID"
+								}
+							]
 						},
-						"description": "Update a student's LeetCode rating and statistics"
+						"description": "Manually update weekly statistics for a student"
 					}
 				},
 				{
-					"name": "Get Student Stats",
+					"name": "Update Weekly Stats from LeetCode",
 					"request": {
-						"method": "GET",
-						"header": [],
+						"method": "POST",
 						"url": {
-							"raw": "{{base_url}}/api/v1/students/1/stats",
+							"raw": "{{base_url}}/api/v1/students/:id/weekly-stats/leetcode",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "students", "1", "stats"]
+							"path": ["api", "v1", "students", ":id", "weekly-stats", "leetcode"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "181",
+									"description": "Student ID"
+								}
+							]
 						},
-						"description": "Get aggregated statistics for a student"
+						"description": "Update weekly statistics by fetching data from LeetCode"
+					}
+				},
+				{
+					"name": "Update All Students Weekly Stats",
+					"request": {
+						"method": "PUT",
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/weekly-stats/update-all",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", "weekly-stats", "update-all"]
+						},
+						"description": "Update weekly statistics for all students in the system"
+					}
+				}
+			]
+		},
+		{
+			"name": "Contest History",
+			"item": [
+				{
+					"name": "Update Contest History",
+					"request": {
+						"method": "PUT",
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/:id/contest-history",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", ":id", "contest-history"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "181",
+									"description": "Student ID"
+								}
+							]
+						},
+						"description": "Update contest history for a student from LeetCode"
+					}
+				},
+				{
+					"name": "Update All Contest Histories",
+					"request": {
+						"method": "PUT",
+						"url": {
+							"raw": "{{base_url}}/api/v1/students/contest-history/update-all",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "students", "contest-history", "update-all"]
+						},
+						"description": "Update contest histories for all students"
 					}
 				}
 			]

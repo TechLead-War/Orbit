@@ -1,63 +1,50 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/ayush/ORBIT/internal/config"
-	"github.com/ayush/ORBIT/internal/database"
-	"github.com/ayush/ORBIT/internal/handlers"
-	"github.com/ayush/ORBIT/internal/jobs"
-	"github.com/ayush/ORBIT/internal/repository"
 	"github.com/ayush/ORBIT/internal/server"
-	"github.com/joho/godotenv"
 	"go.uber.org/zap"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
+	logger, err := zap.NewProduction()
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
 	}
-
-	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
 	cfg := config.Load()
 
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
-		cfg.DBHost, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBPort)
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	srv, err := server.New(cfg, logger)
 	if err != nil {
-		logger.Fatal("Failed to connect to database", zap.Error(err))
+		logger.Fatal("Failed to create server", zap.Error(err))
 	}
 
-	studentRepo := repository.NewStudentRepository(db)
-	dbService := database.NewDatabase(db)
-	handler := handlers.NewHandler(dbService)
+	go func() {
+		if err := srv.Start(); err != nil {
+			logger.Fatal("Failed to start server", zap.Error(err))
+		}
+	}()
 
-	// Initialize rating updater with weekly interval
-	ratingUpdater := jobs.NewRatingUpdater(studentRepo, logger, 7*24*time.Hour) // 7 days
-	ratingUpdater.Start()
-	defer ratingUpdater.Stop()
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
 
-	// Initialize contest history updater with weekly interval
-	contestHistoryUpdater := jobs.NewContestHistoryUpdater(studentRepo, logger, 7*24*time.Hour) // 7 days
-	contestHistoryUpdater.Start()
-	defer contestHistoryUpdater.Stop()
+	logger.Info("Shutting down server...")
 
-	router := server.SetupRouter(handler)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	if err := srv.Stop(ctx); err != nil {
+		logger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
 
-	if err := router.Run(":" + port); err != nil {
-		logger.Fatal("Failed to start server", zap.Error(err))
-	}
+	logger.Info("Server exiting")
 }

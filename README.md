@@ -188,3 +188,5 @@ Run ``./generate_erd.sh``
 
 Step3: You can see a ``erd`` folder, navigate to ``erd/index.html`` to see the database schema.
 
+Todo:
+1. A verifier to ensure we have all correct data of the username of leetcode

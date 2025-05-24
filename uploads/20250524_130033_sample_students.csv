@@ -1,0 +1,6 @@
+student_id,name,email,leetcode_id,passing_year
+STU001,John Doe,john.doe@example.com,john_leetcode,2024
+STU002,Jane Smith,jane.smith@example.com,jane_leetcode,2024
+STU003,Bob Wilson,bob.wilson@example.com,bob_leetcode,2025
+STU004,Alice Brown,alice.brown@example.com,alice_leetcode,2024
+STU005,Charlie Davis,charlie.davis@example.com,charlie_leetcode,2025 

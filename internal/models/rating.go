@@ -5,7 +5,7 @@ import "time"
 // Rating represents a student's LeetCode performance snapshot
 type Rating struct {
 	ID            uint      `json:"id" gorm:"primaryKey"`
-	StudentID     uint      `json:"student_id" gorm:"index:idx_student_recorded,unique:student_recorded"`
+	StudentID     uint      `json:"student_id" gorm:"index:idx_student_recorded,unique:student_recorded;not null"`
 	Rating        int       `json:"rating" gorm:"comment:Composite score (problem_rating + contest_bonus). Problem rating: Easy(x1) + Medium(x3) + Hard(x5). Contest bonus: 20% of LeetCode contest rating"`
 	ProblemsCount int       `json:"problems_count" gorm:"comment:Total number of problems solved"`
 	EasyCount     int       `json:"easy_count" gorm:"comment:Number of easy problems solved"`

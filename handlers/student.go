@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ayush/ORBIT/internal/leetcode"
 	"github.com/ayush/ORBIT/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,17 @@ type Database interface {
 	CreateStudent(student *models.Student) error
 	CreateFileUpload(upload *models.FileUpload) error
 	UpdateFileUpload(upload *models.FileUpload) error
+	GetStudent(id uint) (*models.Student, error)
+	GetStudentWithStats(id uint) (*models.Student, error)
+	ListStudents(page, pageSize int) ([]*models.Student, error)
+	UpdateStudentRating(studentID uint, rating *models.Rating) error
+	GetLeetCodeStats(leetcodeID string) (*models.LeetCodeStats, error)
+	GetContestRankings(studentID uint) ([]*models.ContestHistory, error)
+	DeleteContestHistory(studentID uint) error
+	AddContestHistories(studentID uint, histories []*models.ContestHistory) error
+	GetStudentByID(studentID string) (*models.Student, error)
+	GetStudentWeeklyStats(studentID string) ([]models.WeeklyStats, error)
+	GetWeeklyStats(studentID string, start, end time.Time) (*models.WeeklyStats, error)
 }
 
 const (
@@ -219,4 +231,266 @@ func updateFileUploadStatus(h *Handler, fileUpload *models.FileUpload, status, e
 func parseInt(s string) int {
 	i, _ := strconv.Atoi(strings.TrimSpace(s))
 	return i
+}
+
+// GetStudentDetails retrieves student details including weekly stats
+func (h *Handler) GetStudentDetails(c *gin.Context) {
+	studentID := c.Param("id")
+	if studentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "student ID is required"})
+		return
+	}
+
+	student, err := h.db.GetStudentByID(studentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "student not found"})
+		return
+	}
+
+	// Get all weekly stats for the student
+	weeklyStats, err := h.db.GetStudentWeeklyStats(studentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get weekly stats: %v", err)})
+		return
+	}
+
+	// Get current week's stats
+	now := time.Now()
+	weekStart := now.AddDate(0, 0, -int(now.Weekday()))
+	weekEnd := weekStart.AddDate(0, 0, 7)
+	currentWeekStats, err := h.db.GetWeeklyStats(studentID, weekStart, weekEnd)
+	if err != nil && err.Error() != "record not found" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get current week stats: %v", err)})
+		return
+	}
+
+	response := gin.H{
+		"student":      student,
+		"weekly_stats": weeklyStats,
+		"current_week": currentWeekStats,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// GetAllStudents retrieves all students with optional pagination
+func (h *Handler) GetAllStudents(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "60"))
+
+	students, err := h.db.ListStudents(page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get students: %v", err)})
+		return
+	}
+
+	// Transform the response to include rating details
+	response := make([]gin.H, 0, len(students))
+	for _, student := range students {
+		studentData := gin.H{
+			"student_id":   student.StudentID,
+			"name":         student.Name,
+			"email":        student.Email,
+			"leetcode_id":  student.LeetcodeID,
+			"passing_year": student.PassingYear,
+			"created_at":   student.CreatedAt,
+		}
+
+		// Add rating details if available
+		if len(student.Ratings) > 0 {
+			latestRating := student.Ratings[0] // Get the latest rating (already ordered by recorded_at DESC)
+			studentData["rating"] = latestRating.Rating
+			studentData["total_problems"] = latestRating.ProblemsCount
+			studentData["easy_problems"] = latestRating.EasyCount
+			studentData["medium_problems"] = latestRating.MediumCount
+			studentData["hard_problems"] = latestRating.HardCount
+			studentData["global_rank"] = latestRating.GlobalRank
+		} else {
+			// Add default values if no ratings are available
+			studentData["rating"] = 0
+			studentData["total_problems"] = 0
+			studentData["easy_problems"] = 0
+			studentData["medium_problems"] = 0
+			studentData["hard_problems"] = 0
+			studentData["global_rank"] = 0
+		}
+
+		response = append(response, studentData)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"page":      page,
+		"page_size": pageSize,
+		"students":  response,
+	})
+}
+
+// UpdateContestHistory updates the contest history for a specific student
+func (h *Handler) UpdateContestHistory(c *gin.Context) {
+	studentID := c.Param("id")
+	if studentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "student ID is required"})
+		return
+	}
+
+	student, err := h.db.GetStudentByID(studentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "student not found"})
+		return
+	}
+
+	// Create LeetCode service
+	leetcodeService := leetcode.NewService()
+
+	// Get fresh contest stats
+	contestStats, err := leetcodeService.GetContestRanking(student.LeetcodeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch LeetCode contest stats",
+			"details": "Could not retrieve contest data from LeetCode API. This could be due to:" +
+				"\n- Invalid LeetCode username" +
+				"\n- LeetCode API rate limiting" +
+				"\n- LeetCode API being unavailable",
+			"technical_error": err.Error(),
+		})
+		return
+	}
+
+	// Delete existing contest history
+	if err := h.db.DeleteContestHistory(student.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete existing contest history"})
+		return
+	}
+
+	now := time.Now()
+	var histories []*models.ContestHistory
+
+	// Create new contest history entries
+	for _, contest := range contestStats.Data.UserContestRankingHistory {
+		history := &models.ContestHistory{
+			StudentID:         student.ID,
+			ContestTitle:      contest.Contest.Title,
+			Rating:            contest.Rating,
+			Ranking:           contest.Ranking,
+			ProblemsSolved:    contest.ProblemsSolved,
+			FinishTimeSeconds: contest.FinishTimeInSeconds,
+			ContestDate:       now,
+			CreatedAt:         now,
+		}
+		histories = append(histories, history)
+	}
+
+	// Add new contest histories
+	if err := h.db.AddContestHistories(student.ID, histories); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add contest histories"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Contest histories updated successfully",
+		"count":   len(histories),
+	})
+}
+
+// UpdateAllContestHistories updates contest histories for all students
+func (h *Handler) UpdateAllContestHistories(c *gin.Context) {
+	// Create LeetCode service
+	leetcodeService := leetcode.NewService()
+
+	// Get all students (paginated)
+	page := 1
+	pageSize := 10
+	var processedCount int
+	var failedCount int
+
+	for {
+		students, err := h.db.ListStudents(page, pageSize)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch students"})
+			return
+		}
+
+		if len(students) == 0 {
+			break // No more students to process
+		}
+
+		// Process each student in the batch
+		for _, student := range students {
+			// Get fresh contest stats
+			contestStats, err := leetcodeService.GetContestRanking(student.LeetcodeID)
+			if err != nil {
+				failedCount++
+				continue
+			}
+
+			// Delete existing contest history
+			if err := h.db.DeleteContestHistory(student.ID); err != nil {
+				failedCount++
+				continue
+			}
+
+			now := time.Now()
+			var histories []*models.ContestHistory
+
+			// Create new contest history entries
+			for _, contest := range contestStats.Data.UserContestRankingHistory {
+				history := &models.ContestHistory{
+					StudentID:         student.ID,
+					ContestTitle:      contest.Contest.Title,
+					Rating:            contest.Rating,
+					Ranking:           contest.Ranking,
+					ProblemsSolved:    contest.ProblemsSolved,
+					FinishTimeSeconds: contest.FinishTimeInSeconds,
+					ContestDate:       now,
+					CreatedAt:         now,
+				}
+				histories = append(histories, history)
+			}
+
+			// Add new contest histories
+			if err := h.db.AddContestHistories(student.ID, histories); err != nil {
+				failedCount++
+				continue
+			}
+
+			processedCount++
+			// Add a small delay between students to avoid rate limiting
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		page++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":         "Contest histories update completed",
+		"processed_count": processedCount,
+		"failed_count":    failedCount,
+	})
+}
+
+// GetContestHistory retrieves contest history for a specific student
+func (h *Handler) GetContestHistory(c *gin.Context) {
+	studentID := c.Param("id")
+	if studentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "student ID is required"})
+		return
+	}
+
+	student, err := h.db.GetStudentByID(studentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "student not found"})
+		return
+	}
+
+	// Get contest history
+	rankings, err := h.db.GetContestRankings(student.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch contest history"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"student_id": student.StudentID,
+		"history":    rankings,
+	})
 }
